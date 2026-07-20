@@ -53,9 +53,21 @@
       document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
       btn.classList.add("active");
       el("panel-" + btn.dataset.tab).classList.add("active");
-      if (signer) refreshAll();
+      if (signer) refreshForTab(btn.dataset.tab);
     });
   });
+
+  // Only fetch what the currently-open tab actually needs, instead of everything every time.
+  async function refreshForTab(tab){
+    if (!signer) return;
+    if (Object.keys(balances).length === 0) {
+      await refreshBalancesOnly();
+    }
+    if (tab === "swap") { renderSwapBalances(); }
+    else if (tab === "liquidity") { renderLiquidityPanel(); }
+    else if (tab === "lend") { renderLendRows(); }
+    else if (tab === "borrow") { renderBorrowRows(); }
+  }
 
   function showErr(id, msg){ const e = el(id); e.textContent = msg; e.classList.add("show"); }
   function clearErr(id){ const e = el(id); e.textContent = ""; e.classList.remove("show"); }
@@ -151,12 +163,18 @@
     }
   }
 
+  async function refreshBalancesOnly(){
+    if (!signer) return;
+    const results = await Promise.all(TOKEN_LIST.map(async sym => {
+      try { return [sym, fmt(sym, await tokenContract(sym, provider).balanceOf(userAddress))]; }
+      catch(e){ return [sym, 0]; }
+    }));
+    results.forEach(([sym, val]) => { balances[sym] = val; });
+  }
+
   async function refreshAll(){
     if (!signer) return;
-    for (const sym of TOKEN_LIST) {
-      try { balances[sym] = fmt(sym, await tokenContract(sym, provider).balanceOf(userAddress)); }
-      catch(e){ balances[sym] = 0; }
-    }
+    await refreshBalancesOnly();
     renderSwapBalances();
     renderLiquidityPanel();
     renderLendRows();
@@ -328,10 +346,14 @@
     const container = el("lendRows");
     if (!signer) { container.innerHTML = '<div class="err-line show" style="color:var(--text-faint)">Connect your wallet to view lending.</div>'; return; }
     const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, provider);
+    const results = await Promise.all(TOKEN_LIST.map(async sym => {
+      try { return [sym, await lending.getDepositBalance(userAddress, TOKENS[sym].address)]; }
+      catch(e){ return [sym, [0n, 0n]]; }
+    }));
+    const dataBySym = Object.fromEntries(results);
     let html = "";
     for (const sym of TOKEN_LIST) {
-      let principal = 0n, interest = 0n;
-      try { [principal, interest] = await lending.getDepositBalance(userAddress, TOKENS[sym].address); } catch(e){}
+      const [principal, interest] = dataBySym[sym];
       html += `
         <div class="token-row">
           <div class="token-row-head">
@@ -399,18 +421,24 @@
     const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, provider);
 
     try {
-      const cv = await lending.getCollateralValueUSD(userAddress);
-      const bv = await lending.getBorrowValueUSD(userAddress);
-      const mb = await lending.getMaxBorrowableUSD(userAddress);
+      const [cv, bv, mb] = await Promise.all([
+        lending.getCollateralValueUSD(userAddress),
+        lending.getBorrowValueUSD(userAddress),
+        lending.getMaxBorrowableUSD(userAddress)
+      ]);
       el("collateralValueUSD").textContent = "$" + Number(ethers.formatUnits(cv,6)).toFixed(2);
       el("borrowValueUSD").textContent = "$" + Number(ethers.formatUnits(bv,6)).toFixed(2);
       el("maxBorrowUSD").textContent = "$" + Number(ethers.formatUnits(mb,6)).toFixed(2);
     } catch(e){ console.error(e); }
 
+    const colResults = await Promise.all(TOKEN_LIST.map(async sym => {
+      try { return [sym, await lending.collateral(userAddress, TOKENS[sym].address)]; }
+      catch(e){ return [sym, 0n]; }
+    }));
+    const colBySym = Object.fromEntries(colResults);
     let cHtml = "";
     for (const sym of TOKEN_LIST) {
-      let colAmt = 0n;
-      try { colAmt = await lending.collateral(userAddress, TOKENS[sym].address); } catch(e){}
+      const colAmt = colBySym[sym];
       cHtml += `
         <div class="token-row">
           <div class="token-row-head">
@@ -426,10 +454,14 @@
     }
     cContainer.innerHTML = cHtml;
 
+    const borResults = await Promise.all(TOKEN_LIST.map(async sym => {
+      try { return [sym, await lending.getBorrowBalance(userAddress, TOKENS[sym].address)]; }
+      catch(e){ return [sym, [0n, 0n]]; }
+    }));
+    const borBySym = Object.fromEntries(borResults);
     let bHtml = "";
     for (const sym of TOKEN_LIST) {
-      let principal = 0n, interest = 0n;
-      try { [principal, interest] = await lending.getBorrowBalance(userAddress, TOKENS[sym].address); } catch(e){}
+      const [principal, interest] = borBySym[sym];
       bHtml += `
         <div class="token-row">
           <div class="token-row-head">
