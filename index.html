@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ABHA Fi — DeFi built on Arc Testnet</title>
-<meta name="description" content="ABHA Fi — swap, add liquidity, lend and borrow USDC, EURC and cirBTC. Built on Arc Testnet.">
+<meta name="description" content="ABHA Fi — swap, provide liquidity, lend and borrow USDC, EURC and cirBTC. Built on Arc Testnet.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -33,7 +33,15 @@
       </div>
       ABHA Fi
     </div>
-    <button class="btn-wallet" id="walletBtn">Connect Wallet</button>
+    <div class="wallet-wrap" id="walletWrap">
+      <button class="btn-wallet" id="walletBtn">Connect Wallet</button>
+      <div class="wallet-menu" id="walletMenu">
+        <div class="wallet-menu-address" id="walletMenuAddress"></div>
+        <div class="wallet-menu-item" id="copyAddressBtn">📋 Copy Address</div>
+        <div class="wallet-menu-item" id="viewExplorerBtn">🔗 View on Explorer</div>
+        <div class="wallet-menu-item danger" id="disconnectBtn">⏻ Disconnect</div>
+      </div>
+    </div>
   </nav>
 
   <div class="hero">
@@ -51,7 +59,6 @@
     <button class="tab-btn" data-tab="about">About</button>
   </div>
 
-  <!-- SWAP TAB -->
   <div class="panel active" id="panel-swap">
     <div class="card">
       <div class="card-head"><h2>Swap</h2><span class="status-tag" id="statusTag"><span class="dot" id="cardDot"></span> Not connected</span></div>
@@ -79,7 +86,6 @@
     </div>
   </div>
 
-  <!-- LIQUIDITY TAB -->
   <div class="panel" id="panel-liquidity">
     <div class="card">
       <div class="card-head"><h2>Add Liquidity</h2></div>
@@ -106,7 +112,6 @@
     </div>
   </div>
 
-  <!-- LEND TAB -->
   <div class="panel" id="panel-lend">
     <div class="card">
       <div class="card-head"><h2>Lend</h2><span class="status-tag">5.00% APY</span></div>
@@ -117,7 +122,6 @@
     </div>
   </div>
 
-  <!-- BORROW TAB -->
   <div class="panel" id="panel-borrow">
     <div class="card">
       <div class="card-head"><h2>Collateral</h2></div>
@@ -135,12 +139,10 @@
     </div>
   </div>
 
-  <!-- FAUCET TAB -->
   <div class="panel" id="panel-faucet">
     <div class="card">
       <div class="card-head"><h2>Get Testnet Assets</h2></div>
       <p class="about-text">New here? Two quick steps and you're ready to use ABHA Fi.</p>
-
       <div class="token-row">
         <div class="token-row-head">
           <div class="token-chip"><span class="token-dot" style="background:var(--cyan);color:#07090F;">1</span><span class="token-name">Add Arc Testnet</span></div>
@@ -150,7 +152,6 @@
         <div class="err-line" id="faucetErr"></div>
         <div class="success-toast" id="faucetSuccess">✓ <span id="faucetSuccessMsg"></span></div>
       </div>
-
       <div class="token-row">
         <div class="token-row-head">
           <div class="token-chip"><span class="token-dot" style="background:var(--violet);color:#07090F;">2</span><span class="token-name">Claim Test Tokens</span></div>
@@ -158,18 +159,15 @@
         <p class="about-text" style="margin-bottom:10px;">Get free testnet USDC and EURC from Circle's official faucet. Connect your wallet there and select Arc Testnet.</p>
         <a class="btn ghost" style="display:block;text-align:center;text-decoration:none;" href="https://faucet.circle.com" target="_blank" rel="noopener">Open Circle Faucet ↗</a>
       </div>
-
       <div class="warn-box">cirBTC does not have a public faucet yet. If you need it for testing, reach out via the links in the About tab.</div>
     </div>
   </div>
 
-  <!-- ABOUT TAB -->
   <div class="panel" id="panel-about">
     <div class="card">
       <div class="card-head"><h2>About ABHA Fi</h2></div>
       <p class="about-text">ABHA Fi is an independent, community-built DeFi suite <strong>built on Arc Testnet</strong> — Circle's stablecoin-native L1. It brings together <strong>swaps, liquidity pools, lending and borrowing</strong> for USDC, EURC and cirBTC, using USDC-denominated gas for every transaction.</p>
       <p class="about-text">This is a testnet learning project, not an official Circle or Arc product. Feedback, bug reports, and contributions are always welcome!</p>
-
       <a class="link-row" href="https://x.com/ImChoudharyA" target="_blank" rel="noopener">
         <div class="link-icon">🐦</div>
         <div><div class="link-label">Twitter / X</div><div class="link-sub">Updates & announcements</div></div>
@@ -183,7 +181,6 @@
         <div><div class="link-label">Telegram</div><div class="link-sub">Chat & discussion</div></div>
       </a>
     </div>
-
     <div class="card">
       <div class="card-head"><h2>Contracts</h2></div>
       <div class="addr-row"><span class="k">MultiPoolSwap</span><a href="https://testnet.arcscan.app/address/0xC71b9D161780AbA17D60b86D5d2Fb07F98DD5279" target="_blank" rel="noopener">0xC71b…5279 ↗</a></div>
