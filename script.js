@@ -213,12 +213,22 @@
     throw lastErr;
   }
 
+  // ethers v6's tx.wait() resolves even for a reverted transaction — it does NOT throw
+  // automatically. Always check receipt.status ourselves before showing a success message.
+  async function requireSuccess(tx){
+    const receipt = await tx.wait();
+    if (!receipt || receipt.status !== 1) {
+      throw new Error("Transaction reverted on-chain.");
+    }
+    return receipt;
+  }
+
   async function ensureApproval(sym, spender, neededAmount){
     const c = tokenContract(sym, signer);
     const allowance = await withRetry(() => c.allowance(userAddress, spender));
     if (allowance < neededAmount) {
       const tx = await c.approve(spender, MAX_UINT);
-      await tx.wait();
+      await requireSuccess(tx);
     }
   }
 
@@ -329,7 +339,7 @@
     try {
       const c = tokenContract(direction.from, signer);
       const tx = await c.approve(MULTISWAP_ADDRESS, MAX_UINT);
-      await tx.wait();
+      await requireSuccess(tx);
       await updateSwapAction();
     } catch (err) { console.error(err); showErr("swapErr", err.shortMessage || "Approval failed."); updateSwapAction(); }
   }
@@ -341,7 +351,7 @@
       const swap = new ethers.Contract(MULTISWAP_ADDRESS, SWAP_ABI, signer);
       const amtIn = parse(direction.from, el("amountIn").value);
       const tx = await swap.swap(TOKENS[direction.from].address, TOKENS[direction.to].address, amtIn);
-      await tx.wait();
+      await requireSuccess(tx);
       showSuccess("swapSuccess","swapSuccessMsg","Swap complete — " + direction.from + " → " + direction.to);
       el("amountIn").value=""; el("amountOut").value=""; el("rateLine").textContent="";
       await refreshAll();
@@ -393,7 +403,7 @@
       btn.textContent = "Adding liquidity…";
       const swap = new ethers.Contract(MULTISWAP_ADDRESS, SWAP_ABI, signer);
       const tx = await swap.addLiquidity(TOKENS[a].address, TOKENS[b].address, amtA, amtB);
-      await tx.wait();
+      await requireSuccess(tx);
       showSuccess("liqSuccess","liqSuccessMsg","Liquidity added to " + a + "/" + b);
       el("liqAmountA").value=""; el("liqAmountB").value="";
       await refreshAll();
@@ -441,7 +451,7 @@
       await ensureApproval(sym, LENDING_ADDRESS, amt);
       const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, signer);
       const tx = await lending.deposit(TOKENS[sym].address, amt);
-      await tx.wait();
+      await requireSuccess(tx);
       showSuccess("lendSuccess","lendSuccessMsg","Deposited " + val + " " + sym);
       await refreshAll();
     } catch(err){ console.error(err); showErr("lendErr", err.shortMessage || "Deposit failed."); }
@@ -453,7 +463,7 @@
     try {
       const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, signer);
       const tx = await lending.withdraw(TOKENS[sym].address, parse(sym, val));
-      await tx.wait();
+      await requireSuccess(tx);
       showSuccess("lendSuccess","lendSuccessMsg","Withdrew " + val + " " + sym);
       await refreshAll();
     } catch(err){ console.error(err); showErr("lendErr", err.shortMessage || "Withdraw failed."); }
@@ -463,7 +473,7 @@
     try {
       const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, signer);
       const tx = await lending.claimInterest(TOKENS[sym].address);
-      await tx.wait();
+      await requireSuccess(tx);
       showSuccess("lendSuccess","lendSuccessMsg","Interest claimed for " + sym);
       await refreshAll();
     } catch(err){ console.error(err); showErr("lendErr", err.shortMessage || "Claim failed."); }
@@ -546,7 +556,7 @@
       await ensureApproval(sym, LENDING_ADDRESS, amt);
       const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, signer);
       const tx = await lending.depositCollateral(TOKENS[sym].address, amt);
-      await tx.wait();
+      await requireSuccess(tx);
       showSuccess("borrowSuccess","borrowSuccessMsg","Collateral deposited: " + val + " " + sym);
       await refreshAll();
     } catch(err){ console.error(err); showErr("borrowErr", err.shortMessage || "Deposit failed."); }
@@ -558,7 +568,7 @@
     try {
       const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, signer);
       const tx = await lending.withdrawCollateral(TOKENS[sym].address, parse(sym, val));
-      await tx.wait();
+      await requireSuccess(tx);
       showSuccess("borrowSuccess","borrowSuccessMsg","Collateral withdrawn: " + val + " " + sym);
       await refreshAll();
     } catch(err){ console.error(err); showErr("borrowErr", err.shortMessage || "Withdraw failed — check collateral ratio."); }
@@ -570,7 +580,7 @@
     try {
       const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, signer);
       const tx = await lending.borrow(TOKENS[sym].address, parse(sym, val));
-      await tx.wait();
+      await requireSuccess(tx);
       showSuccess("borrowSuccess","borrowSuccessMsg","Borrowed " + val + " " + sym);
       await refreshAll();
     } catch(err){ console.error(err); showErr("borrowErr", err.shortMessage || "Borrow failed — check collateral."); }
@@ -584,7 +594,7 @@
       await ensureApproval(sym, LENDING_ADDRESS, amt);
       const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, signer);
       const tx = await lending.repay(TOKENS[sym].address, amt);
-      await tx.wait();
+      await requireSuccess(tx);
       showSuccess("borrowSuccess","borrowSuccessMsg","Repaid " + val + " " + sym);
       await refreshAll();
     } catch(err){ console.error(err); showErr("borrowErr", err.shortMessage || "Repay failed."); }
