@@ -19,11 +19,24 @@ a{color:inherit;}
 nav{display:flex; align-items:center; justify-content:space-between; padding:22px 0 0;}
 .logo{display:flex; align-items:center; gap:10px; font-family:'Space Grotesk',sans-serif; font-weight:700; font-size:19px;}
 .logo-mark{width:28px; height:28px; border-radius:50%; background:linear-gradient(135deg, var(--cyan), var(--violet)); display:flex; align-items:center; justify-content:center; flex-shrink:0;}
+.logo-mark-img{height:30px; width:auto; display:block;}
+.about-logo{display:block; height:64px; width:auto; margin:0 auto 18px;}
 .btn-wallet{font-family:'Inter',sans-serif; font-weight:600; font-size:13px; color:#07090F;
   background:linear-gradient(135deg, var(--cyan), #6FEFE0); border:none; border-radius:10px; padding:11px 18px; cursor:pointer;
   transition:transform 0.12s ease; box-shadow:0 8px 24px -8px rgba(18,227,201,0.5);}
 .btn-wallet:hover{transform:translateY(-1px);}
-.btn-wallet.connected{background:var(--glass-2); color:var(--text); border:1px solid var(--border); font-family:'JetBrains Mono',monospace; font-weight:400; box-shadow:none;}
+.btn-wallet.connected{background:var(--glass-2); color:var(--text); border:1px solid var(--border); font-family:'JetBrains Mono',monospace; font-weight:400; box-shadow:none; display:flex; align-items:center; gap:8px; padding:8px 14px 8px 8px;}
+.wallet-wrap{position:relative;}
+.wallet-avatar{width:22px; height:22px; border-radius:50%; background:linear-gradient(135deg, var(--cyan), var(--violet)); flex-shrink:0;}
+.wallet-chevron{opacity:0.55; margin-left:2px; transition:transform 0.15s ease;}
+.wallet-wrap.open .wallet-chevron{transform:rotate(180deg);}
+.wallet-menu{position:absolute; top:calc(100% + 10px); right:0; min-width:210px; background:linear-gradient(180deg, rgba(22,27,38,0.98), rgba(10,13,20,0.98));
+  border:1px solid var(--border); border-radius:14px; padding:6px; box-shadow:0 24px 60px -18px rgba(0,0,0,0.7); display:none; z-index:50; backdrop-filter:blur(20px);}
+.wallet-menu.open{display:block;}
+.wallet-menu-address{font-family:'JetBrains Mono',monospace; font-size:10.5px; color:var(--text-faint); padding:8px 12px 10px; border-bottom:1px solid var(--border-soft); margin-bottom:4px; word-break:break-all;}
+.wallet-menu-item{display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:10px; font-family:'Inter',sans-serif; font-size:13px; font-weight:500; color:var(--text); cursor:pointer; transition:background 0.15s ease;}
+.wallet-menu-item:hover{background:var(--glass-2);}
+.wallet-menu-item.danger{color:var(--red);}
 
 .hero{text-align:center; padding:38px 0 4px;}
 .eyebrow{font-family:'JetBrains Mono',monospace; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--text-dim);
