@@ -250,6 +250,14 @@
     renderBorrowRows();
   }
 
+  // After a transaction confirms, Arc Testnet's RPC nodes can take a moment to sync with
+  // each other. Give it a short head start before reading balances, otherwise a read can
+  // land on a node that hasn't seen the new block yet and shows stale data.
+  async function refreshAllAfterTx(){
+    await new Promise(r => setTimeout(r, 1500));
+    await refreshAll();
+  }
+
   function populateTokenSelects(){
     ["fromTokenSelect","toTokenSelect"].forEach(id => {
       const sel = el(id);
@@ -354,7 +362,7 @@
       await requireSuccess(tx);
       showSuccess("swapSuccess","swapSuccessMsg","Swap complete — " + direction.from + " → " + direction.to);
       el("amountIn").value=""; el("amountOut").value=""; el("rateLine").textContent="";
-      await refreshAll();
+      await refreshAllAfterTx();
     } catch (err) { console.error(err); showErr("swapErr", err.shortMessage || "Swap failed."); updateSwapAction(); }
   }
 
@@ -406,7 +414,7 @@
       await requireSuccess(tx);
       showSuccess("liqSuccess","liqSuccessMsg","Liquidity added to " + a + "/" + b);
       el("liqAmountA").value=""; el("liqAmountB").value="";
-      await refreshAll();
+      await refreshAllAfterTx();
     } catch (err) { console.error(err); showErr("liqErr", err.shortMessage || "Adding liquidity failed."); }
     updateLiqAction();
   }
@@ -453,7 +461,7 @@
       const tx = await lending.deposit(TOKENS[sym].address, amt);
       await requireSuccess(tx);
       showSuccess("lendSuccess","lendSuccessMsg","Deposited " + val + " " + sym);
-      await refreshAll();
+      await refreshAllAfterTx();
     } catch(err){ console.error(err); showErr("lendErr", err.shortMessage || "Deposit failed."); }
   };
   window.__lendWithdraw = async function(sym){
@@ -465,7 +473,7 @@
       const tx = await lending.withdraw(TOKENS[sym].address, parse(sym, val));
       await requireSuccess(tx);
       showSuccess("lendSuccess","lendSuccessMsg","Withdrew " + val + " " + sym);
-      await refreshAll();
+      await refreshAllAfterTx();
     } catch(err){ console.error(err); showErr("lendErr", err.shortMessage || "Withdraw failed."); }
   };
   window.__lendClaim = async function(sym){
@@ -475,7 +483,7 @@
       const tx = await lending.claimInterest(TOKENS[sym].address);
       await requireSuccess(tx);
       showSuccess("lendSuccess","lendSuccessMsg","Interest claimed for " + sym);
-      await refreshAll();
+      await refreshAllAfterTx();
     } catch(err){ console.error(err); showErr("lendErr", err.shortMessage || "Claim failed."); }
   };
 
@@ -558,7 +566,7 @@
       const tx = await lending.depositCollateral(TOKENS[sym].address, amt);
       await requireSuccess(tx);
       showSuccess("borrowSuccess","borrowSuccessMsg","Collateral deposited: " + val + " " + sym);
-      await refreshAll();
+      await refreshAllAfterTx();
     } catch(err){ console.error(err); showErr("borrowErr", err.shortMessage || "Deposit failed."); }
   };
   window.__withdrawCollateral = async function(sym){
@@ -570,7 +578,7 @@
       const tx = await lending.withdrawCollateral(TOKENS[sym].address, parse(sym, val));
       await requireSuccess(tx);
       showSuccess("borrowSuccess","borrowSuccessMsg","Collateral withdrawn: " + val + " " + sym);
-      await refreshAll();
+      await refreshAllAfterTx();
     } catch(err){ console.error(err); showErr("borrowErr", err.shortMessage || "Withdraw failed — check collateral ratio."); }
   };
   window.__borrow = async function(sym){
@@ -582,7 +590,7 @@
       const tx = await lending.borrow(TOKENS[sym].address, parse(sym, val));
       await requireSuccess(tx);
       showSuccess("borrowSuccess","borrowSuccessMsg","Borrowed " + val + " " + sym);
-      await refreshAll();
+      await refreshAllAfterTx();
     } catch(err){ console.error(err); showErr("borrowErr", err.shortMessage || "Borrow failed — check collateral."); }
   };
   window.__repay = async function(sym){
@@ -596,7 +604,7 @@
       const tx = await lending.repay(TOKENS[sym].address, amt);
       await requireSuccess(tx);
       showSuccess("borrowSuccess","borrowSuccessMsg","Repaid " + val + " " + sym);
-      await refreshAll();
+      await refreshAllAfterTx();
     } catch(err){ console.error(err); showErr("borrowErr", err.shortMessage || "Repay failed."); }
   };
 
