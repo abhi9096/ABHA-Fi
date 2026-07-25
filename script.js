@@ -60,9 +60,7 @@
   // Only fetch what the currently-open tab actually needs, instead of everything every time.
   async function refreshForTab(tab){
     if (!signer) return;
-    if (Object.keys(balances).length === 0) {
-      await refreshBalancesOnly();
-    }
+    await refreshBalancesOnly();
     if (tab === "swap") { renderSwapBalances(); }
     else if (tab === "liquidity") { renderLiquidityPanel(); }
     else if (tab === "lend") { renderLendRows(); }
@@ -111,6 +109,9 @@
     }
   });
 
+  const walletMenu = el("walletMenu");
+  const walletWrap = document.querySelector(".wallet-wrap");
+
   async function connectWallet(){
     if (typeof window.ethereum === "undefined") { showErr("swapErr", "No wallet found. Install MetaMask to continue."); return; }
     try {
@@ -119,8 +120,7 @@
       await ensureArcNetwork();
       signer = await provider.getSigner();
       userAddress = await signer.getAddress();
-      walletBtn.textContent = userAddress.slice(0,6) + "…" + userAddress.slice(-4);
-      walletBtn.classList.add("connected");
+      renderConnectedWallet();
       el("cardDot").classList.add("on");
       el("statusTag").innerHTML = '<span class="dot on"></span> Connected';
       await refreshAll();
@@ -131,6 +131,53 @@
       showErr("swapErr", err && err.code === 4001 ? "Connection request rejected." : "Could not connect wallet.");
     }
   }
+
+  function renderConnectedWallet(){
+    walletBtn.innerHTML =
+      '<span class="wallet-avatar"></span>' +
+      '<span>' + userAddress.slice(0,6) + '…' + userAddress.slice(-4) + '</span>' +
+      '<svg class="wallet-chevron" width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 3L5 7L9 3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    walletBtn.classList.add("connected");
+    el("walletMenuAddress").textContent = userAddress;
+  }
+
+  function closeWalletMenu(){
+    walletMenu.classList.remove("open");
+    walletWrap.classList.remove("open");
+  }
+
+  function disconnectWallet(){
+    signer = null; userAddress = null; balances = {};
+    walletBtn.classList.remove("connected");
+    walletBtn.innerHTML = "Connect Wallet";
+    el("cardDot").classList.remove("on");
+    el("statusTag").innerHTML = '<span class="dot" id="cardDot"></span> Not connected';
+    closeWalletMenu();
+    renderSwapBalances();
+  }
+
+  walletBtn.addEventListener("click", (e) => {
+    if (!signer) { connectWallet(); return; }
+    e.stopPropagation();
+    const isOpen = walletMenu.classList.toggle("open");
+    walletWrap.classList.toggle("open", isOpen);
+  });
+
+  document.addEventListener("click", (e) => {
+    if (walletWrap && !walletWrap.contains(e.target)) closeWalletMenu();
+  });
+
+  el("copyAddressBtn").addEventListener("click", () => {
+    if (!userAddress) return;
+    navigator.clipboard.writeText(userAddress).catch(() => {});
+    closeWalletMenu();
+  });
+  el("viewExplorerBtn").addEventListener("click", () => {
+    if (!userAddress) return;
+    window.open("https://testnet.arcscan.app/address/" + userAddress, "_blank", "noopener");
+    closeWalletMenu();
+  });
+  el("disconnectBtn").addEventListener("click", disconnectWallet);
 
   async function ensureArcNetwork(){
     const net = await provider.getNetwork();
@@ -148,15 +195,27 @@
       } else { throw switchErr; }
     }
   }
-  walletBtn.addEventListener("click", () => { if (!signer) connectWallet(); });
-
   function tokenContract(sym, runner){ return new ethers.Contract(TOKENS[sym].address, ERC20_ABI, runner); }
   function fmt(sym, raw){ return Number(ethers.formatUnits(raw, TOKENS[sym].decimals)); }
   function parse(sym, val){ return ethers.parseUnits(val, TOKENS[sym].decimals); }
 
+  // Arc Testnet's RPC occasionally times out or rate-limits a single call in a batch of
+  // parallel requests. Rather than silently showing 0, retry a couple of times first.
+  async function withRetry(fn, attempts = 3, delayMs = 400){
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+      try { return await fn(); }
+      catch (err) {
+        lastErr = err;
+        if (i < attempts - 1) await new Promise(r => setTimeout(r, delayMs * (i + 1)));
+      }
+    }
+    throw lastErr;
+  }
+
   async function ensureApproval(sym, spender, neededAmount){
     const c = tokenContract(sym, signer);
-    const allowance = await c.allowance(userAddress, spender);
+    const allowance = await withRetry(() => c.allowance(userAddress, spender));
     if (allowance < neededAmount) {
       const tx = await c.approve(spender, MAX_UINT);
       await tx.wait();
@@ -166,8 +225,8 @@
   async function refreshBalancesOnly(){
     if (!signer) return;
     const results = await Promise.all(TOKEN_LIST.map(async sym => {
-      try { return [sym, fmt(sym, await tokenContract(sym, provider).balanceOf(userAddress))]; }
-      catch(e){ return [sym, 0]; }
+      try { return [sym, fmt(sym, await withRetry(() => tokenContract(sym, provider).balanceOf(userAddress)))]; }
+      catch(e){ console.error("Balance fetch failed for", sym, e); return [sym, 0]; }
     }));
     results.forEach(([sym, val]) => { balances[sym] = val; });
   }
@@ -234,10 +293,10 @@
     if (!val || Number(val) <= 0 || !provider) { el("amountOut").value=""; el("rateLine").textContent=""; updateSwapAction(); return; }
     try {
       const swap = new ethers.Contract(MULTISWAP_ADDRESS, SWAP_ABI, provider);
-      const [reserveIn, reserveOut] = await swap.getReserves(TOKENS[direction.from].address, TOKENS[direction.to].address);
+      const [reserveIn, reserveOut] = await withRetry(() => swap.getReserves(TOKENS[direction.from].address, TOKENS[direction.to].address));
       if (reserveIn === 0n || reserveOut === 0n) { el("amountOut").value=""; el("rateLine").textContent="Pool has no liquidity yet."; updateSwapAction(); return; }
       const amtIn = parse(direction.from, val);
-      const out = await swap.getAmountOut(amtIn, reserveIn, reserveOut);
+      const out = await withRetry(() => swap.getAmountOut(amtIn, reserveIn, reserveOut));
       const outFormatted = fmt(direction.to, out);
       el("amountOut").value = outFormatted.toFixed(6);
       el("rateLine").textContent = "1 " + direction.from + " ≈ " + (outFormatted/Number(val)).toFixed(6) + " " + direction.to;
@@ -304,7 +363,7 @@
     if (provider) {
       try {
         const swap = new ethers.Contract(MULTISWAP_ADDRESS, SWAP_ABI, provider);
-        const [rA, rB] = await swap.getReserves(TOKENS[a].address, TOKENS[b].address);
+        const [rA, rB] = await withRetry(() => swap.getReserves(TOKENS[a].address, TOKENS[b].address));
         el("liqReservesLine").textContent = `Pool reserves — ${fmt(a,rA).toFixed(4)} ${a} ⇌ ${fmt(b,rB).toFixed(6)} ${b}`;
       } catch(e){ el("liqReservesLine").textContent = "Pool reserves — unavailable"; }
     }
@@ -347,7 +406,7 @@
     if (!signer) { container.innerHTML = '<div class="err-line show" style="color:var(--text-faint)">Connect your wallet to view lending.</div>'; return; }
     const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, provider);
     const results = await Promise.all(TOKEN_LIST.map(async sym => {
-      try { return [sym, await lending.getDepositBalance(userAddress, TOKENS[sym].address)]; }
+      try { return [sym, await withRetry(() => lending.getDepositBalance(userAddress, TOKENS[sym].address))]; }
       catch(e){ return [sym, [0n, 0n]]; }
     }));
     const dataBySym = Object.fromEntries(results);
@@ -422,9 +481,9 @@
 
     try {
       const [cv, bv, mb] = await Promise.all([
-        lending.getCollateralValueUSD(userAddress),
-        lending.getBorrowValueUSD(userAddress),
-        lending.getMaxBorrowableUSD(userAddress)
+        withRetry(() => lending.getCollateralValueUSD(userAddress)),
+        withRetry(() => lending.getBorrowValueUSD(userAddress)),
+        withRetry(() => lending.getMaxBorrowableUSD(userAddress))
       ]);
       el("collateralValueUSD").textContent = "$" + Number(ethers.formatUnits(cv,6)).toFixed(2);
       el("borrowValueUSD").textContent = "$" + Number(ethers.formatUnits(bv,6)).toFixed(2);
@@ -432,7 +491,7 @@
     } catch(e){ console.error(e); }
 
     const colResults = await Promise.all(TOKEN_LIST.map(async sym => {
-      try { return [sym, await lending.collateral(userAddress, TOKENS[sym].address)]; }
+      try { return [sym, await withRetry(() => lending.collateral(userAddress, TOKENS[sym].address))]; }
       catch(e){ return [sym, 0n]; }
     }));
     const colBySym = Object.fromEntries(colResults);
@@ -455,7 +514,7 @@
     cContainer.innerHTML = cHtml;
 
     const borResults = await Promise.all(TOKEN_LIST.map(async sym => {
-      try { return [sym, await lending.getBorrowBalance(userAddress, TOKENS[sym].address)]; }
+      try { return [sym, await withRetry(() => lending.getBorrowBalance(userAddress, TOKENS[sym].address))]; }
       catch(e){ return [sym, [0n, 0n]]; }
     }));
     const borBySym = Object.fromEntries(borResults);
