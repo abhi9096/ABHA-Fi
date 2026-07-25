@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ABHA Fi — DeFi built on Arc Testnet</title>
-<meta name="description" content="ABHA Fi — swap, provide liquidity, lend and borrow USDC, EURC and cirBTC. Built on Arc Testnet.">
+<meta name="description" content="ABHA Fi — swap, add liquidity, lend and borrow USDC, EURC and cirBTC. Built on Arc Testnet.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
@@ -16,21 +16,7 @@
 <div class="shell">
   <nav>
     <div class="logo">
-      <div class="logo-mark">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-          <circle cx="12" cy="12" r="3.2" fill="#07090F"/>
-          <g stroke="#07090F" stroke-width="1.8" stroke-linecap="round">
-            <line x1="12" y1="1.5" x2="12" y2="5"/>
-            <line x1="12" y1="19" x2="12" y2="22.5"/>
-            <line x1="1.5" y1="12" x2="5" y2="12"/>
-            <line x1="19" y1="12" x2="22.5" y2="12"/>
-            <line x1="4.4" y1="4.4" x2="6.8" y2="6.8"/>
-            <line x1="17.2" y1="17.2" x2="19.6" y2="19.6"/>
-            <line x1="19.6" y1="4.4" x2="17.2" y2="6.8"/>
-            <line x1="6.8" y1="17.2" x2="4.4" y2="19.6"/>
-          </g>
-        </svg>
-      </div>
+      <img src="assets/logo-icon.png" alt="ABHA Fi" class="logo-mark-img">
       ABHA Fi
     </div>
     <div class="wallet-wrap" id="walletWrap">
@@ -59,6 +45,7 @@
     <button class="tab-btn" data-tab="about">About</button>
   </div>
 
+  <!-- SWAP TAB -->
   <div class="panel active" id="panel-swap">
     <div class="card">
       <div class="card-head"><h2>Swap</h2><span class="status-tag" id="statusTag"><span class="dot" id="cardDot"></span> Not connected</span></div>
@@ -86,6 +73,7 @@
     </div>
   </div>
 
+  <!-- LIQUIDITY TAB -->
   <div class="panel" id="panel-liquidity">
     <div class="card">
       <div class="card-head"><h2>Add Liquidity</h2></div>
@@ -112,6 +100,7 @@
     </div>
   </div>
 
+  <!-- LEND TAB -->
   <div class="panel" id="panel-lend">
     <div class="card">
       <div class="card-head"><h2>Lend</h2><span class="status-tag">5.00% APY</span></div>
@@ -122,6 +111,7 @@
     </div>
   </div>
 
+  <!-- BORROW TAB -->
   <div class="panel" id="panel-borrow">
     <div class="card">
       <div class="card-head"><h2>Collateral</h2></div>
@@ -139,6 +129,7 @@
     </div>
   </div>
 
+  <!-- FAUCET TAB -->
   <div class="panel" id="panel-faucet">
     <div class="card">
       <div class="card-head"><h2>Get Testnet Assets</h2></div>
@@ -163,21 +154,22 @@
     </div>
   </div>
 
+  <!-- ABOUT TAB -->
   <div class="panel" id="panel-about">
     <div class="card">
-      <div class="card-head"><h2>About ABHA Fi</h2></div>
+      <img src="assets/logo-full.png" alt="ABHA Fi — Decentralized Finance" class="about-logo">
       <p class="about-text">ABHA Fi is an independent, community-built DeFi suite <strong>built on Arc Testnet</strong> — Circle's stablecoin-native L1. It brings together <strong>swaps, liquidity pools, lending and borrowing</strong> for USDC, EURC and cirBTC, using USDC-denominated gas for every transaction.</p>
       <p class="about-text">This is a testnet learning project, not an official Circle or Arc product. Feedback, bug reports, and contributions are always welcome!</p>
       <a class="link-row" href="https://x.com/ImChoudharyA" target="_blank" rel="noopener">
-        <div class="link-icon">🐦</div>
+        <div class="link-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M18.9 2H22.4L14.9 10.6L23.7 22H16.8L11.4 14.9L5.2 22H1.7L9.7 12.8L1.3 2H8.4L13.3 8.5L18.9 2Z" fill="currentColor"/></svg></div>
         <div><div class="link-label">Twitter / X</div><div class="link-sub">Updates & announcements</div></div>
       </a>
       <a class="link-row" href="https://discordapp.com/users/Amit90098" target="_blank" rel="noopener">
-        <div class="link-icon">💬</div>
+        <div class="link-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M20.3 5.4C18.8 4.7 17.2 4.2 15.6 4C15.4 4.3 15.2 4.7 15 5.1C13.3 4.8 11.6 4.8 9.9 5.1C9.8 4.7 9.6 4.3 9.4 4C7.7 4.2 6.1 4.7 4.7 5.4C2 9.4 1.2 13.3 1.6 17.2C3.4 18.5 5.2 19.3 6.9 19.8C7.3 19.3 7.7 18.7 8 18.1C7.4 17.9 6.9 17.6 6.4 17.3C6.5 17.2 6.7 17.1 6.8 17C10.2 18.6 13.9 18.6 17.2 17C17.3 17.1 17.5 17.2 17.6 17.3C17.1 17.6 16.6 17.9 16 18.1C16.3 18.7 16.7 19.3 17.1 19.8C18.8 19.3 20.6 18.5 22.4 17.2C22.9 12.6 21.7 8.7 20.3 5.4ZM8.5 14.8C7.5 14.8 6.7 13.9 6.7 12.7C6.7 11.6 7.5 10.6 8.5 10.6C9.5 10.6 10.4 11.6 10.3 12.7C10.3 13.9 9.5 14.8 8.5 14.8ZM15.5 14.8C14.5 14.8 13.7 13.9 13.7 12.7C13.7 11.6 14.5 10.6 15.5 10.6C16.5 10.6 17.4 11.6 17.3 12.7C17.3 13.9 16.5 14.8 15.5 14.8Z" fill="currentColor"/></svg></div>
         <div><div class="link-label">Discord</div><div class="link-sub">Message directly for support</div></div>
       </a>
       <a class="link-row" href="https://t.me/amit2017kk" target="_blank" rel="noopener">
-        <div class="link-icon">✈️</div>
+        <div class="link-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M22 3L2.5 10.7C1.2 11.2 1.2 12 2.3 12.3L7.3 13.9L19 6.5C19.6 6.1 20.1 6.3 19.7 6.7L10.3 15.2H10.3L9.9 20.4C10.5 20.4 10.7 20.1 11 19.8L13.5 17.4L18.6 21.1C19.5 21.6 20.2 21.4 20.4 20.3L23.6 4.9C23.9 3.5 23 2.9 22 3Z" fill="currentColor"/></svg></div>
         <div><div class="link-label">Telegram</div><div class="link-sub">Chat & discussion</div></div>
       </a>
     </div>
