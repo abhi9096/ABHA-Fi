@@ -44,6 +44,11 @@
   let direction = { from: "USDC", to: "EURC" };
   let balances = {};
 
+  // Reads go through a direct RPC connection instead of the wallet extension. Wallet
+  // extensions (MetaMask, Rabby) can cache eth_call results internally, which was causing
+  // balances/deposits to show stale (zero) data right after a confirmed transaction.
+  const readProvider = new ethers.JsonRpcProvider("https://rpc.testnet.arc.network");
+
   const el = id => document.getElementById(id);
   const walletBtn = el("walletBtn");
 
@@ -235,7 +240,7 @@
   async function refreshBalancesOnly(){
     if (!signer) return;
     const results = await Promise.all(TOKEN_LIST.map(async sym => {
-      try { return [sym, fmt(sym, await withRetry(() => tokenContract(sym, provider).balanceOf(userAddress)))]; }
+      try { return [sym, fmt(sym, await withRetry(() => tokenContract(sym, readProvider).balanceOf(userAddress)))]; }
       catch(e){ console.error("Balance fetch failed for", sym, e); return [sym, 0]; }
     }));
     results.forEach(([sym, val]) => { balances[sym] = val; });
@@ -310,7 +315,7 @@
     const val = el("amountIn").value;
     if (!val || Number(val) <= 0 || !provider) { el("amountOut").value=""; el("rateLine").textContent=""; updateSwapAction(); return; }
     try {
-      const swap = new ethers.Contract(MULTISWAP_ADDRESS, SWAP_ABI, provider);
+      const swap = new ethers.Contract(MULTISWAP_ADDRESS, SWAP_ABI, readProvider);
       const [reserveIn, reserveOut] = await withRetry(() => swap.getReserves(TOKENS[direction.from].address, TOKENS[direction.to].address));
       if (reserveIn === 0n || reserveOut === 0n) { el("amountOut").value=""; el("rateLine").textContent="Pool has no liquidity yet."; updateSwapAction(); return; }
       const amtIn = parse(direction.from, val);
@@ -328,7 +333,7 @@
     const val = el("amountIn").value;
     if (!val || Number(val) <= 0) { btn.textContent = "Enter an Amount"; btn.disabled = true; btn.classList.remove("warn"); return; }
     try {
-      const c = tokenContract(direction.from, provider);
+      const c = tokenContract(direction.from, readProvider);
       const allowance = await c.allowance(userAddress, MULTISWAP_ADDRESS);
       const amtIn = parse(direction.from, val);
       if (allowance < amtIn) {
@@ -380,7 +385,7 @@
     el("liqBalanceB").textContent = (balances[b]!==undefined ? balances[b].toFixed(4) : "—") + " " + b;
     if (provider) {
       try {
-        const swap = new ethers.Contract(MULTISWAP_ADDRESS, SWAP_ABI, provider);
+        const swap = new ethers.Contract(MULTISWAP_ADDRESS, SWAP_ABI, readProvider);
         const [rA, rB] = await withRetry(() => swap.getReserves(TOKENS[a].address, TOKENS[b].address));
         el("liqReservesLine").textContent = `Pool reserves — ${fmt(a,rA).toFixed(4)} ${a} ⇌ ${fmt(b,rB).toFixed(6)} ${b}`;
       } catch(e){ el("liqReservesLine").textContent = "Pool reserves — unavailable"; }
@@ -422,7 +427,7 @@
   async function renderLendRows(){
     const container = el("lendRows");
     if (!signer) { container.innerHTML = '<div class="err-line show" style="color:var(--text-faint)">Connect your wallet to view lending.</div>'; return; }
-    const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, provider);
+    const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, readProvider);
     const results = await Promise.all(TOKEN_LIST.map(async sym => {
       try { return [sym, await withRetry(() => lending.getDepositBalance(userAddress, TOKENS[sym].address))]; }
       catch(e){ return [sym, [0n, 0n]]; }
@@ -495,7 +500,7 @@
       bContainer.innerHTML = "";
       return;
     }
-    const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, provider);
+    const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, readProvider);
 
     try {
       const [cv, bv, mb] = await Promise.all([
