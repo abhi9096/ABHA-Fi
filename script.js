@@ -204,17 +204,29 @@
   function fmt(sym, raw){ return Number(ethers.formatUnits(raw, TOKENS[sym].decimals)); }
   function parse(sym, val){ return ethers.parseUnits(val, TOKENS[sym].decimals); }
 
-  // Arc Testnet's RPC occasionally times out or rate-limits a single call in a batch of
-  // parallel requests. Rather than silently showing 0, retry a few times with backoff first.
-  // FIX: attempts raised 3 -> 5 and delay raised, since deposit/borrow reads were failing
-  // silently right after a tx and falling back to a hardcoded 0 (see FIX #2 below).
-  async function withRetry(fn, attempts = 5, delayMs = 600){
+  // FIX: the console showed real "429 Too Many Requests" errors from Arc's public RPC —
+  // the app was hammering it with retries too fast, which just triggers more 429s. A 429
+  // means "back off", not "try again immediately", so we now detect it specifically and
+  // wait much longer (2s, 4s, 8s...) before the next attempt instead of a fixed short delay.
+  function isRateLimited(err){
+    const msg = (err && (err.message || err.shortMessage || "")) + "";
+    return msg.includes("429")
+      || (err && err.info && err.info.responseStatus && String(err.info.responseStatus).includes("429"))
+      || (err && err.error && err.error.code === -32005); // common "rate limit" JSON-RPC code
+  }
+
+  async function withRetry(fn, attempts = 5, baseDelayMs = 600){
     let lastErr;
     for (let i = 0; i < attempts; i++) {
       try { return await fn(); }
       catch (err) {
         lastErr = err;
-        if (i < attempts - 1) await new Promise(r => setTimeout(r, delayMs * (i + 1)));
+        if (i < attempts - 1) {
+          const wait = isRateLimited(err)
+            ? 2000 * Math.pow(2, i)      // 2s, 4s, 8s, 16s... on 429 specifically
+            : baseDelayMs * (i + 1);     // normal short backoff for other errors
+          await new Promise(r => setTimeout(r, wait));
+        }
       }
     }
     throw lastErr;
@@ -223,15 +235,17 @@
   // FIX: run a list of async read calls one-after-another (staggered) instead of all at
   // once with Promise.all. Firing 3+ getDepositBalance/getBorrowBalance calls at the exact
   // same millisecond right after a confirmed tx was overloading/rate-limiting Arc's public
-  // RPC endpoint, which caused several of them to fail and silently render as 0.
+  // RPC endpoint (429s), which caused several of them to fail and silently render as 0.
+  // Gap raised 120ms -> 350ms to further reduce how many requests/sec we send.
   async function sequential(items, fn){
     const out = [];
     for (const item of items) {
       out.push(await fn(item));
-      await new Promise(r => setTimeout(r, 120)); // tiny gap between calls
+      await new Promise(r => setTimeout(r, 350));
     }
     return out;
   }
+
 
   // ethers v6's tx.wait() resolves even for a reverted transaction — it does NOT throw
   // automatically. Always check receipt.status ourselves before showing a success message.
