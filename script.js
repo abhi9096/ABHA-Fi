@@ -44,11 +44,6 @@
   let direction = { from: "USDC", to: "EURC" };
   let balances = {};
 
-  // Reads go through a direct RPC connection instead of the wallet extension. Wallet
-  // extensions (MetaMask, Rabby) can cache eth_call results internally, which was causing
-  // balances/deposits to show stale (zero) data right after a confirmed transaction.
-  const readProvider = new ethers.JsonRpcProvider("https://rpc.testnet.arc.network");
-
   const el = id => document.getElementById(id);
   const walletBtn = el("walletBtn");
 
@@ -204,48 +199,19 @@
   function fmt(sym, raw){ return Number(ethers.formatUnits(raw, TOKENS[sym].decimals)); }
   function parse(sym, val){ return ethers.parseUnits(val, TOKENS[sym].decimals); }
 
-  // FIX: the console showed real "429 Too Many Requests" errors from Arc's public RPC —
-  // the app was hammering it with retries too fast, which just triggers more 429s. A 429
-  // means "back off", not "try again immediately", so we now detect it specifically and
-  // wait much longer (2s, 4s, 8s...) before the next attempt instead of a fixed short delay.
-  function isRateLimited(err){
-    const msg = (err && (err.message || err.shortMessage || "")) + "";
-    return msg.includes("429")
-      || (err && err.info && err.info.responseStatus && String(err.info.responseStatus).includes("429"))
-      || (err && err.error && err.error.code === -32005); // common "rate limit" JSON-RPC code
-  }
-
-  async function withRetry(fn, attempts = 5, baseDelayMs = 600){
+  // Arc Testnet's RPC occasionally times out or rate-limits a single call in a batch of
+  // parallel requests. Rather than silently showing 0, retry a couple of times first.
+  async function withRetry(fn, attempts = 3, delayMs = 400){
     let lastErr;
     for (let i = 0; i < attempts; i++) {
       try { return await fn(); }
       catch (err) {
         lastErr = err;
-        if (i < attempts - 1) {
-          const wait = isRateLimited(err)
-            ? 2000 * Math.pow(2, i)      // 2s, 4s, 8s, 16s... on 429 specifically
-            : baseDelayMs * (i + 1);     // normal short backoff for other errors
-          await new Promise(r => setTimeout(r, wait));
-        }
+        if (i < attempts - 1) await new Promise(r => setTimeout(r, delayMs * (i + 1)));
       }
     }
     throw lastErr;
   }
-
-  // FIX: run a list of async read calls one-after-another (staggered) instead of all at
-  // once with Promise.all. Firing 3+ getDepositBalance/getBorrowBalance calls at the exact
-  // same millisecond right after a confirmed tx was overloading/rate-limiting Arc's public
-  // RPC endpoint (429s), which caused several of them to fail and silently render as 0.
-  // Gap raised 120ms -> 350ms to further reduce how many requests/sec we send.
-  async function sequential(items, fn){
-    const out = [];
-    for (const item of items) {
-      out.push(await fn(item));
-      await new Promise(r => setTimeout(r, 350));
-    }
-    return out;
-  }
-
 
   // ethers v6's tx.wait() resolves even for a reverted transaction — it does NOT throw
   // automatically. Always check receipt.status ourselves before showing a success message.
@@ -268,11 +234,11 @@
 
   async function refreshBalancesOnly(){
     if (!signer) return;
-    const results = await sequential(TOKEN_LIST, async sym => {
-      try { return [sym, fmt(sym, await withRetry(() => tokenContract(sym, readProvider).balanceOf(userAddress)))]; }
-      catch(e){ console.error("Balance fetch failed for", sym, e); return [sym, null]; }
-    });
-    results.forEach(([sym, val]) => { if (val !== null) balances[sym] = val; });
+    const results = await Promise.all(TOKEN_LIST.map(async sym => {
+      try { return [sym, fmt(sym, await withRetry(() => tokenContract(sym, provider).balanceOf(userAddress)))]; }
+      catch(e){ console.error("Balance fetch failed for", sym, e); return [sym, 0]; }
+    }));
+    results.forEach(([sym, val]) => { balances[sym] = val; });
   }
 
   async function refreshAll(){
@@ -285,11 +251,10 @@
   }
 
   // After a transaction confirms, Arc Testnet's RPC nodes can take a moment to sync with
-  // each other. Give it a head start before reading balances, otherwise a read can land on
-  // a node that hasn't seen the new block yet and shows stale data.
-  // FIX: raised 1500ms -> 2500ms, and this now pairs with the higher retry count above.
+  // each other. Give it a short head start before reading balances, otherwise a read can
+  // land on a node that hasn't seen the new block yet and shows stale data.
   async function refreshAllAfterTx(){
-    await new Promise(r => setTimeout(r, 2500));
+    await new Promise(r => setTimeout(r, 1500));
     await refreshAll();
   }
 
@@ -345,7 +310,7 @@
     const val = el("amountIn").value;
     if (!val || Number(val) <= 0 || !provider) { el("amountOut").value=""; el("rateLine").textContent=""; updateSwapAction(); return; }
     try {
-      const swap = new ethers.Contract(MULTISWAP_ADDRESS, SWAP_ABI, readProvider);
+      const swap = new ethers.Contract(MULTISWAP_ADDRESS, SWAP_ABI, provider);
       const [reserveIn, reserveOut] = await withRetry(() => swap.getReserves(TOKENS[direction.from].address, TOKENS[direction.to].address));
       if (reserveIn === 0n || reserveOut === 0n) { el("amountOut").value=""; el("rateLine").textContent="Pool has no liquidity yet."; updateSwapAction(); return; }
       const amtIn = parse(direction.from, val);
@@ -363,7 +328,7 @@
     const val = el("amountIn").value;
     if (!val || Number(val) <= 0) { btn.textContent = "Enter an Amount"; btn.disabled = true; btn.classList.remove("warn"); return; }
     try {
-      const c = tokenContract(direction.from, readProvider);
+      const c = tokenContract(direction.from, provider);
       const allowance = await c.allowance(userAddress, MULTISWAP_ADDRESS);
       const amtIn = parse(direction.from, val);
       if (allowance < amtIn) {
@@ -415,7 +380,7 @@
     el("liqBalanceB").textContent = (balances[b]!==undefined ? balances[b].toFixed(4) : "—") + " " + b;
     if (provider) {
       try {
-        const swap = new ethers.Contract(MULTISWAP_ADDRESS, SWAP_ABI, readProvider);
+        const swap = new ethers.Contract(MULTISWAP_ADDRESS, SWAP_ABI, provider);
         const [rA, rB] = await withRetry(() => swap.getReserves(TOKENS[a].address, TOKENS[b].address));
         el("liqReservesLine").textContent = `Pool reserves — ${fmt(a,rA).toFixed(4)} ${a} ⇌ ${fmt(b,rB).toFixed(6)} ${b}`;
       } catch(e){ el("liqReservesLine").textContent = "Pool reserves — unavailable"; }
@@ -454,32 +419,23 @@
     updateLiqAction();
   }
 
-  // FIX: previously any failed read (getDepositBalance) silently became [0n, 0n], making a
-  // successful deposit LOOK like it never happened. Now a failed read is tracked separately
-  // (failed = true) so the row can say "Couldn't load — tap to retry" instead of lying with 0.
   async function renderLendRows(){
     const container = el("lendRows");
     if (!signer) { container.innerHTML = '<div class="err-line show" style="color:var(--text-faint)">Connect your wallet to view lending.</div>'; return; }
-    const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, readProvider);
-    const results = await sequential(TOKEN_LIST, async sym => {
-      try { return [sym, await withRetry(() => lending.getDepositBalance(userAddress, TOKENS[sym].address)), false]; }
-      catch(e){ console.error("getDepositBalance failed for", sym, e); return [sym, [0n, 0n], true]; }
-    });
-    const dataBySym = {};
-    const failedBySym = {};
-    results.forEach(([sym, data, failed]) => { dataBySym[sym] = data; failedBySym[sym] = failed; });
+    const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, provider);
+    const results = await Promise.all(TOKEN_LIST.map(async sym => {
+      try { return [sym, await withRetry(() => lending.getDepositBalance(userAddress, TOKENS[sym].address))]; }
+      catch(e){ return [sym, [0n, 0n]]; }
+    }));
+    const dataBySym = Object.fromEntries(results);
     let html = "";
     for (const sym of TOKEN_LIST) {
       const [principal, interest] = dataBySym[sym];
-      const failed = failedBySym[sym];
-      const statsHtml = failed
-        ? `<span style="color:var(--warn,#e0a030);">Couldn't load balance — <a href="#" onclick="window.__retryLend('${sym}');return false;">tap to retry</a></span>`
-        : `Deposited: ${fmt(sym,principal).toFixed(4)}<br>Interest: ${fmt(sym,interest).toFixed(6)}`;
       html += `
         <div class="token-row">
           <div class="token-row-head">
             <div class="token-chip"><span class="token-dot" style="background:${TOKENS[sym].color}">${sym[0]}</span><span class="token-name">${sym}</span></div>
-            <div class="token-stats">${statsHtml}</div>
+            <div class="token-stats">Deposited: ${fmt(sym,principal).toFixed(4)}<br>Interest: ${fmt(sym,interest).toFixed(6)}</div>
           </div>
           <div class="token-input-row">
             <input type="text" inputmode="decimal" placeholder="Amount" id="lendAmt-${sym}">
@@ -493,9 +449,6 @@
     }
     container.innerHTML = html;
   }
-
-  window.__retryLend = function(){ renderLendRows(); };
-  window.__retryBorrow = function(){ renderBorrowRows(); };
 
   window.__lendDeposit = async function(sym){
     clearErr("lendErr");
@@ -534,8 +487,6 @@
     } catch(err){ console.error(err); showErr("lendErr", err.shortMessage || "Claim failed."); }
   };
 
-  // FIX: same silent-zero problem existed here for collateral + borrow balances — fixed the
-  // same way (sequential calls, surfaced failures instead of hardcoded 0n).
   async function renderBorrowRows(){
     const cContainer = el("collateralRows");
     const bContainer = el("borrowRows");
@@ -544,34 +495,32 @@
       bContainer.innerHTML = "";
       return;
     }
-    const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, readProvider);
+    const lending = new ethers.Contract(LENDING_ADDRESS, LENDING_ABI, provider);
 
     try {
-      const cv = await withRetry(() => lending.getCollateralValueUSD(userAddress));
-      const bv = await withRetry(() => lending.getBorrowValueUSD(userAddress));
-      const mb = await withRetry(() => lending.getMaxBorrowableUSD(userAddress));
+      const [cv, bv, mb] = await Promise.all([
+        withRetry(() => lending.getCollateralValueUSD(userAddress)),
+        withRetry(() => lending.getBorrowValueUSD(userAddress)),
+        withRetry(() => lending.getMaxBorrowableUSD(userAddress))
+      ]);
       el("collateralValueUSD").textContent = "$" + Number(ethers.formatUnits(cv,6)).toFixed(2);
       el("borrowValueUSD").textContent = "$" + Number(ethers.formatUnits(bv,6)).toFixed(2);
       el("maxBorrowUSD").textContent = "$" + Number(ethers.formatUnits(mb,6)).toFixed(2);
     } catch(e){ console.error(e); }
 
-    const colResults = await sequential(TOKEN_LIST, async sym => {
-      try { return [sym, await withRetry(() => lending.collateral(userAddress, TOKENS[sym].address)), false]; }
-      catch(e){ console.error("collateral read failed for", sym, e); return [sym, 0n, true]; }
-    });
-    const colBySym = {}, colFailedBySym = {};
-    colResults.forEach(([sym, val, failed]) => { colBySym[sym] = val; colFailedBySym[sym] = failed; });
+    const colResults = await Promise.all(TOKEN_LIST.map(async sym => {
+      try { return [sym, await withRetry(() => lending.collateral(userAddress, TOKENS[sym].address))]; }
+      catch(e){ return [sym, 0n]; }
+    }));
+    const colBySym = Object.fromEntries(colResults);
     let cHtml = "";
     for (const sym of TOKEN_LIST) {
       const colAmt = colBySym[sym];
-      const statsHtml = colFailedBySym[sym]
-        ? `<span style="color:var(--warn,#e0a030);">Couldn't load — <a href="#" onclick="window.__retryBorrow();return false;">tap to retry</a></span>`
-        : `Wallet: ${(balances[sym]||0).toFixed(4)}<br>Locked: ${fmt(sym,colAmt).toFixed(4)}`;
       cHtml += `
         <div class="token-row">
           <div class="token-row-head">
             <div class="token-chip"><span class="token-dot" style="background:${TOKENS[sym].color}">${sym[0]}</span><span class="token-name">${sym}</span></div>
-            <div class="token-stats">${statsHtml}</div>
+            <div class="token-stats">Wallet: ${(balances[sym]||0).toFixed(4)}<br>Locked: ${fmt(sym,colAmt).toFixed(4)}</div>
           </div>
           <div class="token-input-row"><input type="text" inputmode="decimal" placeholder="Amount" id="colAmt-${sym}"></div>
           <div class="btn-row">
@@ -582,23 +531,19 @@
     }
     cContainer.innerHTML = cHtml;
 
-    const borResults = await sequential(TOKEN_LIST, async sym => {
-      try { return [sym, await withRetry(() => lending.getBorrowBalance(userAddress, TOKENS[sym].address)), false]; }
-      catch(e){ console.error("getBorrowBalance failed for", sym, e); return [sym, [0n, 0n], true]; }
-    });
-    const borBySym = {}, borFailedBySym = {};
-    borResults.forEach(([sym, data, failed]) => { borBySym[sym] = data; borFailedBySym[sym] = failed; });
+    const borResults = await Promise.all(TOKEN_LIST.map(async sym => {
+      try { return [sym, await withRetry(() => lending.getBorrowBalance(userAddress, TOKENS[sym].address))]; }
+      catch(e){ return [sym, [0n, 0n]]; }
+    }));
+    const borBySym = Object.fromEntries(borResults);
     let bHtml = "";
     for (const sym of TOKEN_LIST) {
       const [principal, interest] = borBySym[sym];
-      const statsHtml = borFailedBySym[sym]
-        ? `<span style="color:var(--warn,#e0a030);">Couldn't load — <a href="#" onclick="window.__retryBorrow();return false;">tap to retry</a></span>`
-        : `Borrowed: ${fmt(sym,principal).toFixed(4)}<br>Interest: ${fmt(sym,interest).toFixed(6)}`;
       bHtml += `
         <div class="token-row">
           <div class="token-row-head">
             <div class="token-chip"><span class="token-dot" style="background:${TOKENS[sym].color}">${sym[0]}</span><span class="token-name">${sym}</span></div>
-            <div class="token-stats">${statsHtml}</div>
+            <div class="token-stats">Borrowed: ${fmt(sym,principal).toFixed(4)}<br>Interest: ${fmt(sym,interest).toFixed(6)}</div>
           </div>
           <div class="token-input-row"><input type="text" inputmode="decimal" placeholder="Amount" id="borAmt-${sym}"></div>
           <div class="btn-row">
