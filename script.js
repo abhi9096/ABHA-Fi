@@ -1,6 +1,6 @@
 (function(){
   const MULTISWAP_ADDRESS = "0xC71b9D161780AbA17D60b86D5d2Fb07F98DD5279";
-  const LENDING_ADDRESS = "0xd9145CCE52D386f254917e481eB44e9943F39138";
+  const LENDING_ADDRESS = "0x5E388Bc4596504984A88cbe7a8F0522122bec6c0";
   const ARC_CHAIN_ID = 5042002;
   const ARC_CHAIN_HEX = "0x" + ARC_CHAIN_ID.toString(16);
   const MAX_UINT = ethers.MaxUint256;
@@ -446,6 +446,9 @@
     el("liqTokenBLabel").textContent = b;
     el("liqBalanceA").textContent = (balances[a]!==undefined ? balances[a].toFixed(4) : "—") + " " + a;
     el("liqBalanceB").textContent = (balances[b]!==undefined ? balances[b].toFixed(4) : "—") + " " + b;
+    // Keep the 25%/50%/Max buttons pointed at whichever tokens the pool selector currently shows.
+    el("liqPctA").dataset.sym = a;
+    el("liqPctB").dataset.sym = b;
     if (provider) {
       try {
         const swap = new ethers.Contract(MULTISWAP_ADDRESS, SWAP_ABI, readProvider);
